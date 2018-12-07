@@ -1,5 +1,5 @@
 import tensorflow as tf
-import model_utils as mu
+from . import model_utils as mu
 
 class AlexNet(object):
     """
@@ -78,7 +78,7 @@ class AlexNet(object):
                     learning_rate=params['learning_rate'],
                     mode=mode)
 
-                eval_metrics_op = {
+                eval_metric_ops = {
                     'evalmetric/accuracy':
                         tf.contrib.metrics.streaming_accuracy(          # Why?
                             predictions=predictions, labels=labels)
@@ -89,7 +89,7 @@ class AlexNet(object):
                     predictions=predictions,
                     loss=loss,
                     train_op=train_op,
-                    eval_metrics_ops=eval_metrics_ops)
+                    eval_metric_ops=eval_metric_ops)
 
         return model_fn
 
@@ -116,18 +116,21 @@ class AlexNet(object):
                 conv1 = tf.add(mu.conv2d(images_var, wconv1, stride=(4,4),
                     padding='SAME'), bconv1)
                 conv1 = mu.relu(conv1)
-                pool1 = mu.max_pool2d(conv1, kernel=[1, 3, 3, 1],
+                pool1 = mu.max_pool2d(conv1, kernel_size=[1, 3, 3, 1],
                     stride=[1, 2, 2, 1], padding='VALID')
-
+                tf.summary.histogram('wconv1', wconv1)
+                tf.summary.histogram('bconv1', bconv1)
 
             with tf.variable_scope("conv2"):
                 wconv2 = mu.weight([5, 5, 96, 256], name='wconv2')
-                bconv2 = mu.bias(1.0, [96], name='bconv2')
+                bconv2 = mu.bias(1.0, [256], name='bconv2')
                 conv2 = tf.add(mu.conv2d(pool1, wconv2, stride=(1,1),
                     padding='SAME'), bconv2)
                 conv2 = mu.relu(conv2)
-                pool2 = mu.max_pool2d(conv2, kernel=[1, 3, 3, 1],
+                pool2 = mu.max_pool2d(conv2, kernel_size=[1, 3, 3, 1],
                     stride=[1, 2, 2, 1], padding='VALID')
+                tf.summary.histogram('wconv2', wconv2)
+                tf.summary.histogram('bconv2', bconv2)
 
             with tf.variable_scope("conv3"):
                 wconv3 = mu.weight([3, 3, 256, 384], name='wconv3')
@@ -135,6 +138,8 @@ class AlexNet(object):
                 conv3 = tf.add(mu.conv2d(pool2, wconv3, stride=(1,1),
                     padding='SAME'), bconv3)
                 conv3 = mu.relu(conv3)
+                tf.summary.histogram('wconv3', wconv3)
+                tf.summary.histogram('bconv3', bconv3)
 
             with tf.variable_scope("conv4"):
                 wconv4 = mu.weight([3, 3, 384, 384], name='wconv4')
@@ -142,6 +147,8 @@ class AlexNet(object):
                 conv4 = tf.add(mu.conv2d(conv3, wconv4, stride=(1,1),
                     padding='SAME'), bconv4)
                 conv4 = mu.relu(conv4)
+                tf.summary.histogram('wconv4', wconv4)
+                tf.summary.histogram('bconv4', bconv4)
 
             with tf.variable_scope("conv5"):
                 wconv5 = mu.weight([3, 3, 384, 256], name='wconv5')
@@ -149,8 +156,10 @@ class AlexNet(object):
                 conv5 = tf.add(mu.conv2d(conv4, wconv5, stride=(1,1),
                     padding='SAME'), bconv5)
                 conv5 = mu.relu(conv5)
-                pool5 = mu.max_pool2d(conv5, kernel=[1, 3, 3, 1],
+                pool5 = mu.max_pool2d(conv5, kernel_size=[1, 3, 3, 1],
                     stride=[1, 2, 2, 1], padding='VALID')
+                tf.summary.histogram('wconv5', wconv5)
+                tf.summary.histogram('bconv5', bconv5)
 
 
             pool5_rshp = tf.reshape(tensor=pool5,
@@ -158,24 +167,30 @@ class AlexNet(object):
 
 
             with tf.variable_scope("fc1"):
-                wfc1 = mu.weight([tf.shape(pool5_rshp)[1], 4096], name='wfc1')
+                wfc1 = mu.weight([6*6*256, 4096], name='wfc1')
                 bfc1 = mu.bias(0.0, [4096], name='bfc1')
                 fc1 = tf.add(tf.matmul(pool5_rshp, wfc1), bfc1)
                 fc1 = mu.relu(fc1)
-                fc1 = tf.nn.dropout(fc1, dropout)
+                fc1 = tf.nn.dropout(fc1, 0.5)
+                tf.summary.histogram('wfc1', wfc1)
+                tf.summary.histogram('bfc1', bfc1)
 
             with tf.variable_scope("fc2"):
                 wfc2 = mu.weight([4096, 4096], name='wfc2')
                 bfc2 = mu.bias(0.0, [4096], name='bfc2')
                 fc2 = tf.add(tf.matmul(fc1, wfc2), bfc2)
                 fc2 = mu.relu(fc2)
-                fc2 = tf.nn.dropout(fc2, dropout)
+                fc2 = tf.nn.dropout(fc2, 0.5)
+                tf.summary.histogram('wfc2', wfc2)
+                tf.summary.histogram('bfc2', bfc2)
 
             with tf.variable_scope("output"):
                 wfc3 = mu.weight([4096, 1000], name='wfc3')
                 bfc3 = mu.bias(0.0, [1000], name='bfc3')
                 logits = tf.add(tf.matmul(fc2, wfc3), bfc3)
                 # softmax = tf.nn.softmax(logits)
+                tf.summary.histogram('logits', logits)
+
 
             predictions = tf.argmax(logits, -1)                 # Why -1?
 
@@ -185,11 +200,12 @@ class AlexNet(object):
                         labels=labels_var,
                         logits=logits)
                     loss = tf.reduce_mean(losses, name='loss')
+                tf.summary.scalar('loss', loss)
 
                 with tf.variable_scope("accuracy"):
                     accuracy = tf.contrib.metrics.accuracy(
                         predictions, labels_var)
-
+                tf.summary.scalar('accuracy', accuracy)
 
                 return predictions, loss
 
